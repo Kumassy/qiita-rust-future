@@ -1,42 +1,56 @@
-#![feature(async_await, futures_api)]
-// extern crate tokio;
-// use std::future::{Future, TryFutureExt};
+use std::future::{Future};
 use std::pin::Pin;
 use std::task::{Context};
+
 extern crate futures;
-use futures::{Future, TryFuture, Poll, TryFutureExt, FutureExt};
+use futures::{Poll, TryFutureExt};
 use futures::executor::{block_on, ThreadPool};
 
-// #[derive(Debug, TryFutureExt)]
-struct MyFuture;
-impl TryFuture for MyFuture {
-    type Ok = String;
-    type Error = String;
+extern crate rand;
+use rand::Rng;
 
-    fn try_poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Self::Ok, Self::Error>> {
+struct MyFuture;
+impl Future for MyFuture {
+    type Output = Result<String, String>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         println!("poll called");
-        Poll::Ready("Done".to_string())
+        
+        let mut rng = rand::thread_rng();
+        let i: i32 = rng.gen_range(0, 10);
+        if i < 5 {
+            Poll::Ready(Ok("success".to_string()))
+        } else {
+            Poll::Ready(Err("failure".to_string()))
+        }
     }
 }
-// impl FutureExt for MyFuture{}
 
-// impl TryFutureExt for MyFuture {
-
-// }
-
+fn get_future() -> impl Future<Output=Result<(), ()>> {
+    (MyFuture{}).map_ok(|res| {
+        println!("{}", res);
+    }).map_err(|err| {
+        println!("{}", err);
+    })
+}
 
 fn main() {
     let future = (MyFuture{}).map_ok(|res| {
         println!("{}", res);
-        Ok(())
     }).map_err(|err| {
-        println!("{}", err); // () を返す
+        println!("{}", err);
+    });
+    let _ = block_on(future);
+
+    let future = get_future();
+    ThreadPool::new().expect("Failed to create threadpool").run(future);
+
+
+    let future = (MyFuture{}).inspect_ok(|res| {
+        println!("{}", res); 
+    }).inspect_err(|err| {
+        println!("{}", err);
     });
 
-    // tokio::run(future);
-    // tokio::run(MyFuture{});
-    block_on(MyFuture{});
-    ThreadPool::new().expect("Failed to create threadpool").run(MyFuture{});
-    ThreadPool::new().expect("Failed to create threadpool").run(future);
-    println!("finished");
+    let _ = block_on(future);
 }
